@@ -63,6 +63,37 @@ Tell your assistant exactly this:
 - Ask the assistant to explain what it changed after each action.
 - If you want safe testing, ask it to create a new `*_test.numbers` file first.
 
+## Developer Instructions (Optional)
+
+If you prefer to run the skill directly during development:
+
+1. Run preflight:
+```bash
+python3 skill/apple-flow-numbers/scripts/numbers_tools.py numbers_preflight
+```
+
+2. Force Creator Studio target if needed:
+```bash
+export NUMBERS_APP_TARGET='application "Numbers Creator Studio"'
+```
+
+3. Build the distributable artifact:
+```bash
+./scripts/build_skill.sh
+```
+
+4. Verify skill integrity:
+```bash
+./scripts/verify_skill.sh
+```
+
+5. Install into local Codex skills:
+```bash
+./scripts/install_skill.sh
+```
+
+If automation fails, grant macOS Automation permission for your terminal app and retry preflight.
+
 ## License
 
 MIT
