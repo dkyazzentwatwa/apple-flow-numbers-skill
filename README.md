@@ -1,120 +1,68 @@
-# Apple Numbers Skill
+# Apple Numbers Skill (Beginner Guide)
 
-Local AppleScript automation tools for `.numbers` files, designed for AI-agent workflows.
+This skill lets your AI assistant (Claude, Codex, Cline, etc.) create and update Apple Numbers spreadsheets for you.
 
-## What This Repo Provides
+You do not need to run terminal commands.
 
-- A local CLI at `skill/apple-flow-numbers/scripts/numbers_tools.py`
-- A skill definition at `skill/apple-flow-numbers/SKILL.md`
-- Packaging scripts to build and distribute `dist/apple-flow-numbers.skill`
+## What This Skill Helps You Do
 
-This repo does not require a global `apple-flow` binary.
+- Create new `.numbers` files
+- Add multiple sheets (tabs)
+- Add rows to the top, after data, or bottom
+- Apply simple table styling
+- Convert structured notes/logs into spreadsheets
 
-## Requirements
+## What You Need
 
-- macOS
-- Python 3.8+
-- A scriptable Numbers app:
-- `Numbers Creator Studio` (preferred)
-- Legacy Apple Numbers fallback (`com.apple.Numbers`, `com.apple.iWork.Numbers`, `Numbers`)
-- Automation permissions granted for your terminal app
+- A Mac
+- A Numbers app installed
+- `Numbers Creator Studio` (recommended)
+- Older Apple Numbers versions are also supported as fallback
+- An AI coding assistant you already use (Claude/Codex/Cline/etc.)
 
-## Quick Start
+## How To Install (No Technical Steps)
 
-1. Run preflight:
+Tell your AI assistant to install this repo’s skill for you.
 
-```bash
-python3 skill/apple-flow-numbers/scripts/numbers_tools.py numbers_preflight
-```
+Use a prompt like:
 
-Expected outcome: JSON containing `"ok": true`.
+- "Install the Apple Numbers skill from this repository into my skills folder."
+- "Set up this Apple Numbers skill so you can create and edit .numbers files for me."
 
-2. If preflight is not OK, set an explicit target and retry:
+If the assistant asks which app target to use, say:
 
-```bash
-export NUMBERS_APP_TARGET='application "Numbers Creator Studio"'
-python3 skill/apple-flow-numbers/scripts/numbers_tools.py numbers_preflight
-```
+- "Use Numbers Creator Studio first, then fallback to legacy Numbers if needed."
 
-Alternative override by bundle id:
+## First-Time Setup Prompt
 
-```bash
-export NUMBERS_APP_BUNDLE_ID='your.bundle.id'
-```
+After install, ask your assistant:
 
-Optional custom app path discovery input:
+- "Run a preflight check for the Apple Numbers skill and fix any app-target issues automatically."
 
-```bash
-export NUMBERS_CREATOR_STUDIO_APP="$HOME/Applications/Numbers Creator Studio.app"
-```
+If there is a macOS permission popup, approve it.
 
-3. Create a workbook:
+## Example Prompts You Can Copy
 
-```bash
-python3 skill/apple-flow-numbers/scripts/numbers_tools.py numbers_create_workbook \
-  "/abs/path/workbook.numbers" \
-  '{"sheets":[{"sheet_name":"Tasks","table_name":"Tasks","headers":["Date","Task","Status"],"rows":[["2026-03-04","Draft plan","Active"]]}]}' \
-  --overwrite true
-```
+- "Create a new expense tracker Numbers file with columns Date, Item, Category, Amount, Payment Method, Notes and add 20 test rows."
+- "Add 2 rows at the top and 2 rows at the bottom of each sheet in my second brain workbook."
+- "Create a workbook with 8 tabs for projects, people, inbox, decisions, habits, learning, resources, and archive."
+- "Style the header row so it is easy to read and set practical column widths."
+- "Verify that rows were inserted correctly and tell me which row numbers were used."
 
-## Target Resolution Order
+## If Something Fails
 
-`numbers_tools.py` resolves app targets in this order:
+Tell your assistant exactly this:
 
-1. `NUMBERS_APP_TARGET`
-2. `NUMBERS_APP_BUNDLE_ID`
-3. Creator Studio app path/name/bundle-id candidates
-4. Legacy fallbacks: `com.apple.Numbers`, `com.apple.iWork.Numbers`, `Numbers`
+- "Use Numbers Creator Studio as the app target and retry outside sandbox if needed."
+- "Run preflight again and show me what app target you selected."
+- "If Creator Studio fails, try legacy Numbers fallback automatically."
 
-## Common Commands
+## Notes For Beginners
 
-```bash
-python3 skill/apple-flow-numbers/scripts/numbers_tools.py numbers_preflight
-python3 skill/apple-flow-numbers/scripts/numbers_tools.py numbers_create ...
-python3 skill/apple-flow-numbers/scripts/numbers_tools.py numbers_create_workbook ...
-python3 skill/apple-flow-numbers/scripts/numbers_tools.py numbers_add_sheet ...
-python3 skill/apple-flow-numbers/scripts/numbers_tools.py numbers_append_rows ...
-python3 skill/apple-flow-numbers/scripts/numbers_tools.py numbers_style_apply ...
-```
+- You can speak in plain English; no special syntax is required.
+- Ask the assistant to explain what it changed after each action.
+- If you want safe testing, ask it to create a new `*_test.numbers` file first.
 
-## Build And Verify The Skill Artifact
+## License
 
-Build:
-
-```bash
-./scripts/build_skill.sh
-```
-
-Verify:
-
-```bash
-./scripts/verify_skill.sh
-```
-
-Install locally to Codex skills directory:
-
-```bash
-./scripts/install_skill.sh
-```
-
-Artifact path:
-
-- `dist/apple-flow-numbers.skill`
-
-## Project Layout
-
-```text
-apple-flow-numbers-skill/
-├── skill/
-│   └── apple-flow-numbers/
-│       ├── SKILL.md
-│       └── scripts/
-│           └── numbers_tools.py
-├── scripts/
-│   ├── build_skill.sh
-│   ├── install_skill.sh
-│   ├── verify_skill.sh
-│   └── md_log_to_numbers_workbook.py
-└── dist/
-    └── apple-flow-numbers.skill
-```
+MIT
