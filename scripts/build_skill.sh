@@ -12,11 +12,14 @@ if [[ ! -d "$SKILL_DIR" ]]; then
 fi
 
 mkdir -p "$DIST_DIR"
+rm -f "$OUT_FILE"
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
 
 mkdir -p "$tmpdir/apple-flow-numbers"
 cp -R "$SKILL_DIR/." "$tmpdir/apple-flow-numbers/"
+# Strip common macOS metadata files from packaged artifact.
+find "$tmpdir/apple-flow-numbers" -name ".DS_Store" -type f -delete
 
 (cd "$tmpdir" && zip -q -r "$OUT_FILE" apple-flow-numbers)
 

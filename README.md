@@ -1,164 +1,120 @@
-# Apple Flow Numbers
+# Apple Numbers Skill
 
-> **Apple Numbers automation for AI agents.** Create, modify, and manage `.numbers` spreadsheets programmatically through an elegant CLI interface.
+Local AppleScript automation tools for `.numbers` files, designed for AI-agent workflows.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![macOS](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](https://www.apple.com/macos/)
+## What This Repo Provides
 
----
+- A local CLI at `skill/apple-flow-numbers/scripts/numbers_tools.py`
+- A skill definition at `skill/apple-flow-numbers/SKILL.md`
+- Packaging scripts to build and distribute `dist/apple-flow-numbers.skill`
 
-## Overview
-
-**Apple Flow Numbers** is a standalone skill that enables AI agents to interact with Apple Numbers spreadsheets directly. Whether you need to create new workbooks, append data to existing sheets, or automate complex spreadsheet workflows, this tool provides a simple, reliable interface.
-
-> Inspired by [apple-flow](https://github.com/dkyazzentwatwa/apple-flow) — a broader Apple ecosystem automation framework.
-
----
-
-## Features
-
-| Feature | Description |
-|---------|-------------|
-| **Create Workbooks** | Generate new `.numbers` files with custom sheets and headers |
-| **Append Data** | Add structured rows with automatic type detection |
-| **Flexible Insertion** | Choose where data goes: after headers, after existing data, or at the end |
-| **Read & Verify** | Read back sheet contents to validate operations |
-| **Standalone** | No dependencies — works independently as a skill or CLI tool |
-
----
-
-## Installation
-
-### As a Skill
-
-```bash
-./scripts/build_skill.sh
-./scripts/install_skill.sh
-```
-
-### Direct CLI Usage
-
-```bash
-python3 skill/apple-flow-numbers/scripts/numbers_tools.py --help
-```
-
----
-
-## Quick Start
-
-### Create a New Workbook
-
-```python
-from skill.apple_flow_numbers.scripts.numbers_tools import create_workbook
-
-create_workbook(
-    "/path/to/workbook.numbers",
-    sheet_name="Expenses",
-    headers=["Date", "Category", "Amount", "Notes"]
-)
-```
-
-### Append Rows
-
-```python
-from skill.apple_flow_numbers.scripts.numbers_tools import append_rows
-
-append_rows(
-    "/path/to/workbook.numbers",
-    rows=[
-        ["2024-03-01", "Office", 150.00, "Printer paper"],
-        ["2024-03-02", "Travel", 45.50, "Taxi to airport"]
-    ],
-    insert_behavior="after-data"
-)
-```
-
-### Convert Markdown Logs to Workbooks
-
-Transform structured markdown files into multi-tab spreadsheets:
-
-```bash
-./scripts/md_log_to_numbers_workbook.py \
-  --input /path/to/automation-log.md \
-  --output /path/to/workbook.numbers \
-  --sheets 3 \
-  --rows-per-sheet 20 \
-  --overwrite
-```
-
----
-
-## API Reference
-
-### Core Functions
-
-#### `create_workbook(path, sheet_name=None, headers=None)`
-
-Creates a new Numbers workbook.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `path` | `str` | Output path for the `.numbers` file |
-| `sheet_name` | `str` | Optional sheet name (defaults to "Sheet 1") |
-| `headers` | `list` | Optional column headers |
-
-#### `append_rows(path, rows, insert_behavior="after-data", target_sheet_name=None)`
-
-Appends rows to an existing workbook.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `path` | `str` | Path to the `.numbers` file |
-| `rows` | `list[list]` | 2D array of row data |
-| `insert_behavior` | `str` | `"after-data"`, `"after-headers"`, or `"at-end"` |
-| `target_sheet_name` | `str` | Optional target sheet name |
-
-#### `read_sheet(path, rows=None, sheet_name=None)`
-
-Reads contents from a sheet for verification.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `path` | `str` | Path to the `.numbers` file |
-| `rows` | `int` | Number of rows to read |
-| `sheet_name` | `str` | Optional sheet name |
-
----
-
-## Project Structure
-
-```
-apple-flow-numbers-skill/
-├── skill/
-│   └── apple-flow-numbers/
-│       ├── SKILL.md                    # Skill instructions & workflows
-│       └── scripts/
-│           └── numbers_tools.py        # Core Numbers automation library
-├── scripts/
-│   ├── build_skill.sh                  # Build distributable .skill file
-│   ├── install_skill.sh                # Install to Codex skills directory
-│   ├── verify_skill.sh                 # Validate skill structure
-│   └── md_log_to_numbers_workbook.py   # Markdown → Numbers converter
-└── dist/
-    └── apple-flow-numbers.skill        # Built artifact (zip)
-```
-
----
+This repo does not require a global `apple-flow` binary.
 
 ## Requirements
 
-- **macOS** with Apple Numbers installed
-- **Python** 3.8 or later
+- macOS
+- Python 3.8+
+- A scriptable Numbers app:
+- `Numbers Creator Studio` (preferred)
+- Legacy Apple Numbers fallback (`com.apple.Numbers`, `com.apple.iWork.Numbers`, `Numbers`)
+- Automation permissions granted for your terminal app
 
----
+## Quick Start
 
-## License
+1. Run preflight:
 
-MIT License — see [LICENSE](LICENSE) for details.
+```bash
+python3 skill/apple-flow-numbers/scripts/numbers_tools.py numbers_preflight
+```
 
----
+Expected outcome: JSON containing `"ok": true`.
 
-## Acknowledgments
+2. If preflight is not OK, set an explicit target and retry:
 
-This project was inspired by [apple-flow](https://github.com/dkyazzentwatwa/apple-flow), a comprehensive Apple ecosystem automation framework by [@dkyazzentwatwa](https://github.com/dkyazzentwatwa).
+```bash
+export NUMBERS_APP_TARGET='application "Numbers Creator Studio"'
+python3 skill/apple-flow-numbers/scripts/numbers_tools.py numbers_preflight
+```
+
+Alternative override by bundle id:
+
+```bash
+export NUMBERS_APP_BUNDLE_ID='your.bundle.id'
+```
+
+Optional custom app path discovery input:
+
+```bash
+export NUMBERS_CREATOR_STUDIO_APP="$HOME/Applications/Numbers Creator Studio.app"
+```
+
+3. Create a workbook:
+
+```bash
+python3 skill/apple-flow-numbers/scripts/numbers_tools.py numbers_create_workbook \
+  "/abs/path/workbook.numbers" \
+  '{"sheets":[{"sheet_name":"Tasks","table_name":"Tasks","headers":["Date","Task","Status"],"rows":[["2026-03-04","Draft plan","Active"]]}]}' \
+  --overwrite true
+```
+
+## Target Resolution Order
+
+`numbers_tools.py` resolves app targets in this order:
+
+1. `NUMBERS_APP_TARGET`
+2. `NUMBERS_APP_BUNDLE_ID`
+3. Creator Studio app path/name/bundle-id candidates
+4. Legacy fallbacks: `com.apple.Numbers`, `com.apple.iWork.Numbers`, `Numbers`
+
+## Common Commands
+
+```bash
+python3 skill/apple-flow-numbers/scripts/numbers_tools.py numbers_preflight
+python3 skill/apple-flow-numbers/scripts/numbers_tools.py numbers_create ...
+python3 skill/apple-flow-numbers/scripts/numbers_tools.py numbers_create_workbook ...
+python3 skill/apple-flow-numbers/scripts/numbers_tools.py numbers_add_sheet ...
+python3 skill/apple-flow-numbers/scripts/numbers_tools.py numbers_append_rows ...
+python3 skill/apple-flow-numbers/scripts/numbers_tools.py numbers_style_apply ...
+```
+
+## Build And Verify The Skill Artifact
+
+Build:
+
+```bash
+./scripts/build_skill.sh
+```
+
+Verify:
+
+```bash
+./scripts/verify_skill.sh
+```
+
+Install locally to Codex skills directory:
+
+```bash
+./scripts/install_skill.sh
+```
+
+Artifact path:
+
+- `dist/apple-flow-numbers.skill`
+
+## Project Layout
+
+```text
+apple-flow-numbers-skill/
+├── skill/
+│   └── apple-flow-numbers/
+│       ├── SKILL.md
+│       └── scripts/
+│           └── numbers_tools.py
+├── scripts/
+│   ├── build_skill.sh
+│   ├── install_skill.sh
+│   ├── verify_skill.sh
+│   └── md_log_to_numbers_workbook.py
+└── dist/
+    └── apple-flow-numbers.skill
+```

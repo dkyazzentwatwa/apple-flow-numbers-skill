@@ -1,16 +1,17 @@
 ---
 name: apple-flow-numbers
-description: General Apple Numbers automation for Apple Flow. Use when working with `.numbers` files through the local `scripts/numbers_tools.py` CLI, including creating new sheets, appending structured rows, choosing insertion behavior (`after-data`, `after-headers`, `at-end`), and validating/debugging row placement with read-back checks.
+description: General Apple Numbers automation with a local CLI for `.numbers` files. Use when creating workbooks, adding sheets, appending rows with insertion control (`after-data`, `after-headers`, `at-end`), styling ranges, and validating data placement.
 ---
 
-# Apple Flow Numbers
+# Apple Numbers Automation (Local CLI)
 
 Use this skill to reliably create and update Apple Numbers documents with:
-- `python3 scripts/numbers_tools.py numbers_create`
-- `python3 scripts/numbers_tools.py numbers_create_workbook`
-- `python3 scripts/numbers_tools.py numbers_add_sheet`
-- `python3 scripts/numbers_tools.py numbers_append_rows`
-- `python3 scripts/numbers_tools.py numbers_style_apply`
+- `python3 skill/apple-flow-numbers/scripts/numbers_tools.py numbers_preflight`
+- `python3 skill/apple-flow-numbers/scripts/numbers_tools.py numbers_create`
+- `python3 skill/apple-flow-numbers/scripts/numbers_tools.py numbers_create_workbook`
+- `python3 skill/apple-flow-numbers/scripts/numbers_tools.py numbers_add_sheet`
+- `python3 skill/apple-flow-numbers/scripts/numbers_tools.py numbers_append_rows`
+- `python3 skill/apple-flow-numbers/scripts/numbers_tools.py numbers_style_apply`
 
 Favor deterministic CLI workflows over ad hoc AppleScript. Use direct AppleScript only for read-back verification and debugging.
 
@@ -33,9 +34,14 @@ Favor deterministic CLI workflows over ad hoc AppleScript. Use direct AppleScrip
 
 ## Quick Start
 
-1. Create a Numbers file with headers:
+1. Run preflight and confirm `"ok": true`:
 ```bash
-python3 scripts/numbers_tools.py numbers_create \
+python3 skill/apple-flow-numbers/scripts/numbers_tools.py numbers_preflight
+```
+
+2. Create a Numbers file with headers:
+```bash
+python3 skill/apple-flow-numbers/scripts/numbers_tools.py numbers_create \
   "/abs/path/tracker.numbers" \
   '["Date","Item","Category","Amount","Notes"]' \
   --sheet "Sheet 1" \
@@ -43,9 +49,9 @@ python3 scripts/numbers_tools.py numbers_create \
   --overwrite true
 ```
 
-2. Append rows (recommended default `after-data`):
+3. Append rows (recommended default `after-data`):
 ```bash
-python3 scripts/numbers_tools.py numbers_append_rows \
+python3 skill/apple-flow-numbers/scripts/numbers_tools.py numbers_append_rows \
   "/abs/path/tracker.numbers" \
   '[["2026-03-04","Coffee","Food",15,"Morning"],["2026-03-04","Burger","Food",30,"Lunch"]]' \
   --sheet "Sheet 1" \
@@ -53,29 +59,29 @@ python3 scripts/numbers_tools.py numbers_append_rows \
   --position after-data
 ```
 
-3. Verify insertion response:
+4. Verify insertion response:
 - Expect JSON with `"ok": true`
 - Check `start_row` and `insert_after_row`
 
-4. Apply formatting/style:
+5. Apply formatting/style:
 ```bash
-python3 scripts/numbers_tools.py numbers_style_apply \
+python3 skill/apple-flow-numbers/scripts/numbers_tools.py numbers_style_apply \
   "/abs/path/tracker.numbers" \
   '{"scope":"range","start_row":2,"end_row":20,"start_column":1,"end_column":5}' \
   '{"background_color":[255,245,230],"font_size":12,"alignment":"center","row_height":28,"column_width":160}'
 ```
 
-5. Build a full workbook (multiple sheets):
+6. Build a full workbook (multiple sheets):
 ```bash
-python3 scripts/numbers_tools.py numbers_create_workbook \
+python3 skill/apple-flow-numbers/scripts/numbers_tools.py numbers_create_workbook \
   "/abs/path/workbook.numbers" \
   '{"sheets":[{"sheet_name":"Transactions","table_name":"Tx","headers":["Date","Item","Amount"],"rows":[["2026-03-04","Coffee",15]]},{"sheet_name":"Summary","table_name":"Summary","headers":["Metric","Value"],"rows":[["Total",15]]}]}' \
   --overwrite true
 ```
 
-6. Add one more sheet to an existing workbook:
+7. Add one more sheet to an existing workbook:
 ```bash
-python3 scripts/numbers_tools.py numbers_add_sheet \
+python3 skill/apple-flow-numbers/scripts/numbers_tools.py numbers_add_sheet \
   "/abs/path/workbook.numbers" \
   '{"sheet_name":"Dashboard","table_name":"DashboardTable","headers":["Metric","Value"],"rows":[["Count",1]]}'
 ```
@@ -121,9 +127,10 @@ If a CSV has more than the default table width, import directly with full header
 
 Use this AppleScript probe after appending:
 ```bash
-osascript <<'APPLESCRIPT'
+APP_TARGET_EXPR="${NUMBERS_APP_TARGET:-application \"Numbers Creator Studio\"}"
+osascript <<APPLESCRIPT
 set p to POSIX file "/abs/path/tracker.numbers"
-tell application id "com.apple.iWork.Numbers"
+tell ${APP_TARGET_EXPR}
   set d to open p
   set t to first table of first sheet of d
   tell t
@@ -145,8 +152,16 @@ APPLESCRIPT
 - `Can't get sheet` or `Can't get table`:
   - Provide exact `--sheet` and `--table` names.
 - `Connection invalid` / AppleScript runtime failures:
-  - Ensure Apple Numbers is installed (`com.apple.Numbers`; older installs may use `com.apple.iWork.Numbers`) and automation permissions are granted.
-  - `numbers_tools.py` probes multiple targets (`com.apple.Numbers`, `com.apple.iWork.Numbers`, and Creator Studio path/name) and picks the first scriptable target.
+  - Run preflight first:
+    - `python3 skill/apple-flow-numbers/scripts/numbers_tools.py numbers_preflight`
+  - `numbers_tools.py` target resolution order is:
+    - `NUMBERS_APP_TARGET` (direct AppleScript target override)
+    - `NUMBERS_APP_BUNDLE_ID` (converted to `application id "..."`)
+    - Numbers Creator Studio app path/name/bundle-id candidates
+    - Legacy Apple Numbers fallbacks: `com.apple.Numbers`, `com.apple.iWork.Numbers`, `"Numbers"`
+  - If needed, set one explicit target:
+    - `export NUMBERS_APP_TARGET='application "Numbers Creator Studio"'`
+    - `export NUMBERS_APP_BUNDLE_ID='your.bundle.id'`
   - Retry command outside restrictive sandbox context when needed.
 - Rows appear too far down:
   - Use `--position after-data` and verify table has expected headers/data.

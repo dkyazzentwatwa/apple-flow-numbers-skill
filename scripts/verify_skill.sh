@@ -16,6 +16,11 @@ if [[ ! -f "$TOOL_SCRIPT" ]]; then
   exit 1
 fi
 
+if ! rg -q 'numbers_preflight' "$TOOL_SCRIPT"; then
+  echo "numbers_preflight command missing in $TOOL_SCRIPT" >&2
+  exit 1
+fi
+
 if ! rg -q '^name:\s*apple-flow-numbers' "$SKILL_MD"; then
   echo "Frontmatter name missing or incorrect in $SKILL_MD" >&2
   exit 1
@@ -34,6 +39,10 @@ if [[ -f "$SKILL_FILE" ]]; then
   unzip -l "$SKILL_FILE"
   if ! unzip -l "$SKILL_FILE" | rg -q 'apple-flow-numbers/scripts/numbers_tools.py'; then
     echo "Artifact is missing numbers_tools.py" >&2
+    exit 1
+  fi
+  if unzip -l "$SKILL_FILE" | rg -q '\.DS_Store'; then
+    echo "Artifact contains .DS_Store metadata file(s)" >&2
     exit 1
   fi
 else

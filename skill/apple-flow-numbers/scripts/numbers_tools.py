@@ -1,31 +1,117 @@
 #!/usr/bin/env python3
-"""Standalone Numbers tools extracted from apple_flow.apple_tools.
-
-This module intentionally contains only Numbers-related automation logic and a
-simple CLI so it can run independently from apple-flow tools.
-"""
+"""Standalone Numbers tools for local AppleScript-driven workbook automation."""
 
 from __future__ import annotations
 
 import argparse
 import json
 import logging
+import os
+import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger("numbers_tools")
-NUMBERS_APP_TARGETS = (
+DEFAULT_NUMBERS_APP_TARGETS = (
+    'application "Numbers Creator Studio"',
+    'application id "com.apple.NumbersCreatorStudio"',
     'application id "com.apple.Numbers"',
     'application id "com.apple.iWork.Numbers"',
-    'application "/Applications/Numbers Creator Studio.app"',
-    'application "Numbers Creator Studio"',
     'application "Numbers"',
 )
 
+
+def _normalize_user_target(raw_target: str) -> str:
+    """Normalize user input into a valid AppleScript application target."""
+    target = raw_target.strip()
+    if not target:
+        return ""
+    if target.startswith("application "):
+        return target
+    if target.endswith(".app"):
+        return f'application "{target}"'
+    if "." in target and " " not in target:
+        return f'application id "{target}"'
+    return f'application "{target}"'
+
+
+def _read_bundle_id(app_path: Path) -> str:
+    """Read CFBundleIdentifier for an app bundle path."""
+    try:
+        result = subprocess.run(
+            ["mdls", "-name", "kMDItemCFBundleIdentifier", "-raw", str(app_path)],
+            capture_output=True,
+            text=True,
+            timeout=5.0,
+        )
+        if result.returncode != 0:
+            return ""
+        bundle_id = (result.stdout or "").strip()
+        if not bundle_id or bundle_id == "(null)":
+            return ""
+        return bundle_id
+    except Exception:
+        return ""
+
+
+def _discover_creator_studio_targets() -> list[str]:
+    """Build Creator Studio candidates from env + common install locations."""
+    targets: list[str] = []
+    explicit_app_path = os.getenv("NUMBERS_CREATOR_STUDIO_APP", "").strip()
+    possible_paths = [
+        Path("/Applications/Numbers Creator Studio.app"),
+        Path.home() / "Applications" / "Numbers Creator Studio.app",
+    ]
+    if explicit_app_path:
+        possible_paths.insert(0, Path(explicit_app_path).expanduser())
+
+    for app_path in possible_paths:
+        if not app_path.exists():
+            continue
+        targets.append(f'application "{str(app_path)}"')
+        targets.append(f'application "{app_path.stem}"')
+        bundle_id = _read_bundle_id(app_path)
+        if bundle_id:
+            targets.append(f'application id "{bundle_id}"')
+    return targets
+
+
+def _build_numbers_app_targets() -> tuple[str, ...]:
+    """Assemble candidate targets with Creator Studio first."""
+    candidates: list[str] = []
+
+    explicit_target = _normalize_user_target(os.getenv("NUMBERS_APP_TARGET", ""))
+    if explicit_target:
+        candidates.append(explicit_target)
+
+    explicit_bundle = os.getenv("NUMBERS_APP_BUNDLE_ID", "").strip()
+    if explicit_bundle:
+        candidates.append(f'application id "{explicit_bundle}"')
+
+    candidates.extend(_discover_creator_studio_targets())
+    candidates.extend(DEFAULT_NUMBERS_APP_TARGETS)
+
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        normalized = candidate.strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        deduped.append(normalized)
+    return tuple(deduped)
+
 def _probe_applescript_target(target: str, timeout: float = 5.0) -> bool:
     """Best-effort probe for whether a document-based app is scriptable."""
+    ok, _ = _probe_applescript_target_with_error(target, timeout=timeout)
+    return ok
+
+
+def _probe_applescript_target_with_error(target: str, timeout: float = 5.0) -> tuple[bool, str]:
+    """Probe target and return (ok, error_text)."""
     script = f"tell {target} to count of documents"
     try:
         result = subprocess.run(
@@ -34,9 +120,17 @@ def _probe_applescript_target(target: str, timeout: float = 5.0) -> bool:
             text=True,
             timeout=timeout,
         )
-        return result.returncode == 0
-    except Exception:
-        return False
+        if result.returncode == 0:
+            return True, ""
+        stderr = (result.stderr or "").strip()
+        stdout = (result.stdout or "").strip()
+        return False, stderr or stdout or f"osascript exited with {result.returncode}"
+    except subprocess.TimeoutExpired:
+        return False, f"osascript probe timed out after {timeout:.1f}s"
+    except FileNotFoundError:
+        return False, "osascript not found"
+    except Exception as exc:
+        return False, str(exc)
 
 def _resolve_applescript_target_candidates(
     candidates: tuple[str, ...],
@@ -55,13 +149,61 @@ def _resolve_applescript_target_candidates(
     return fallback
 
 def _numbers_app_target() -> str:
-    # Support classic iWork bundle IDs and Creator Studio installs where
-    # bundle-id resolution can be flaky but path/name scripting still works.
+    # Prefer explicit/env-driven and Creator Studio targets before Apple Numbers.
+    candidates = _build_numbers_app_targets()
+    if not candidates:
+        candidates = DEFAULT_NUMBERS_APP_TARGETS
     return _resolve_applescript_target_candidates(
-        NUMBERS_APP_TARGETS,
-        fallback=NUMBERS_APP_TARGETS[0],
+        candidates,
+        fallback=candidates[0],
         app_label="Numbers",
     )
+
+
+def numbers_preflight() -> dict[str, Any]:
+    """Run environment and AppleScript-target checks before write operations."""
+    osascript_path = shutil.which("osascript")
+    candidates = _build_numbers_app_targets()
+    selected_target = candidates[0] if candidates else ""
+
+    probe_results: list[dict[str, Any]] = []
+    selected_probe_ok = False
+    selected_probe_error = ""
+    for candidate in candidates:
+        ok, error = _probe_applescript_target_with_error(candidate)
+        probe_results.append({"target": candidate, "ok": ok, "error": error})
+        if ok and not selected_probe_ok:
+            selected_target = candidate
+            selected_probe_ok = True
+            selected_probe_error = ""
+        if candidate == selected_target and not ok and not selected_probe_error:
+            selected_probe_error = error
+
+    hints: list[str] = []
+    if not osascript_path:
+        hints.append("Install/run on macOS with osascript available.")
+    if osascript_path and not selected_probe_ok:
+        hints.append("Grant Automation permission to Terminal/iTerm for the Numbers app target.")
+        hints.append('Set NUMBERS_APP_TARGET, e.g. application "Numbers Creator Studio".')
+        hints.append('Or set NUMBERS_APP_BUNDLE_ID to the app bundle identifier.')
+
+    return {
+        "ok": bool(osascript_path) and selected_probe_ok,
+        "platform": sys.platform,
+        "osascript_available": bool(osascript_path),
+        "osascript_path": osascript_path or "",
+        "env": {
+            "NUMBERS_APP_TARGET": os.getenv("NUMBERS_APP_TARGET", ""),
+            "NUMBERS_APP_BUNDLE_ID": os.getenv("NUMBERS_APP_BUNDLE_ID", ""),
+            "NUMBERS_CREATOR_STUDIO_APP": os.getenv("NUMBERS_CREATOR_STUDIO_APP", ""),
+        },
+        "candidate_targets": list(candidates),
+        "selected_target": selected_target,
+        "selected_target_probe_ok": selected_probe_ok,
+        "selected_target_probe_error": selected_probe_error,
+        "probe_results": probe_results,
+        "hints": hints,
+    }
 
 def _run_script(script: str, timeout: float = 30.0) -> str | None:
     """Run an osascript -e command. Returns stdout string or None on any failure."""
@@ -94,7 +236,7 @@ def _run_script(script: str, timeout: float = 30.0) -> str | None:
             logger.warning("AppleScript timed out after %.1fs", timeout)
             return None
         except FileNotFoundError:
-            logger.warning("osascript not found — apple_tools requires macOS")
+            logger.warning("osascript not found — numbers_tools requires macOS")
             return None
         except Exception as exc:
             logger.warning("Unexpected error running AppleScript: %s", exc)
@@ -1028,7 +1170,7 @@ def _emit(payload: Any) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Standalone Numbers tools")
+    parser = argparse.ArgumentParser(description="Standalone local Numbers tools")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_create = sub.add_parser("numbers_create")
@@ -1060,6 +1202,8 @@ def main() -> int:
     p_style.add_argument("style_json")
     p_style.add_argument("--sheet", dest="sheet_name", default="")
     p_style.add_argument("--table", dest="table_name", default="")
+
+    sub.add_parser("numbers_preflight")
 
     args = parser.parse_args()
 
@@ -1112,6 +1256,11 @@ def main() -> int:
                 sheet_name=args.sheet_name,
                 table_name=args.table_name,
             )
+            _emit(result)
+            return 0 if result.get("ok") else 1
+
+        if args.command == "numbers_preflight":
+            result = numbers_preflight()
             _emit(result)
             return 0 if result.get("ok") else 1
 
